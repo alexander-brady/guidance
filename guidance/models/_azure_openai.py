@@ -45,6 +45,7 @@ class AzureOpenAI(Grammarless):
         max_streaming_tokens=1000,
         timeout=0.5,
         compute_log_probs=False,
+        model_type='chat',
         **kwargs,
     ):
         """Build a new AzureOpenAI model object that represents a model in a given state.
@@ -57,10 +58,21 @@ class AzureOpenAI(Grammarless):
             The endpoint of the deployed model (e.g. https://my_azureai_instance.openai.azure.com)
         azure_deployment: str
             The deployed name of the model (given when the deployment was created)
-        api_key: str
-            The API key for calling the model
         azure_ad_token_provider:
             Alternative to the api_key, allows for use of Azure Entra authentication
+        tokenizer : None or tiktoken.Encoding
+            The tokenizer to use for the given model. If set to None we use `tiktoken.encoding_for_model(model)`.
+        echo : bool
+            If true the final result of creating this model state will be displayed (as HTML in a notebook).
+        api_key: str
+            The API key for calling the model
+        max_streaming_tokens : int
+            The maximum number of tokens we allow this model to generate in a single stream. Normally this is set very
+            high and we rely either on early stopping on the remote side, or on the grammar terminating causing the
+            stream loop to break on the local side. This number needs to be longer than the longest stream you want
+            to generate.
+        model_type: str (chat, instruct, completion)
+            The type of model to use (chat, instruct, completion)
         """
         if not is_openai or not hasattr(openai_package, "OpenAI"):
             raise ImportError(
@@ -74,13 +86,18 @@ class AzureOpenAI(Grammarless):
         # if we are called directly (as opposed to through super()) then we convert ourselves to
         # a more specific subclass if possible
         if self.__class__ is AzureOpenAI:
-            # Default to a completion model
+            
+            model_map = {
+                "chat": AzureOpenAIChat,
+                "completion": AzureOpenAICompletion,
+                "instruct": AzureOpenAIInstruct,
+            }
+            # Default to a chat model
             found_subclass: Type[AzureOpenAI] = (
-                AzureOpenAICompletion
-                if model.endswith("-instruct") 
-                else AzureOpenAIChat
+                # # Hybrid Regex-Rule based model selection
+                # AzureOpenAIInstruct if model.endswith("-instruct") else             
+                model_map.get(model_type, AzureOpenAIChat)
             )
-
             # convert to any found subclass
             self.__class__ = found_subclass
             found_subclass.__init__(

@@ -55,6 +55,7 @@ class OpenAI(Grammarless):
         timeout=0.5,
         compute_log_probs=False,
         engine_class=None,
+        model_type='chat',
         **kwargs,
     ):
         """Build a new OpenAI model object that represents a model in a given state.
@@ -77,6 +78,8 @@ class OpenAI(Grammarless):
             high and we rely either on early stopping on the remote side, or on the grammar terminating causing the
             stream loop to break on the local side. This number needs to be longer than the longest stream you want
             to generate.
+        model_type: str (chat, instruct, completion)
+            The type of model to use (chat, instruct, completion)
         **kwargs :
             All extra keyword arguments are passed directly to the `openai.OpenAI` constructor. Commonly used argument
             names include `base_url` and `organization`
@@ -93,13 +96,16 @@ class OpenAI(Grammarless):
             # instruct
             # elif "instruct" in model: # All current OpenAI instruct models behave as Completion models.
             #     found_subclass = OpenAIInstruct
-                
+            model_map = {
+                "chat": OpenAIChat,
+                "completion": OpenAICompletion,
+                "instruct": OpenAIInstruct,
+            }
             found_subclass: typing.Type[OpenAI] = (
-                OpenAICompletion
-                if model.endswith("-instruct") 
-                else OpenAIChat
+                # # Hybrid Regex-Rule based model selection
+                # OpenAICompletion if model.endswith("-instruct") else
+                model_map.get(model_type, OpenAIChat)
             )
-
             # convert to any found subclass
             self.__class__ = found_subclass
             found_subclass.__init__(
